@@ -1,0 +1,19 @@
+version: 2
+
+updates:
+  # ベースのイメージ (ghcr.io/actions/actions-runner)。runner の自動更新は止めているので、これで更新する。
+  # GitHub は古すぎる runner には job を割り当てないので、PR は溜めずに取り込む
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+
+  # ワークフローで使うアクション (SHA で固定している)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
