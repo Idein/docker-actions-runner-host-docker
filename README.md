@@ -91,27 +91,27 @@ docker build -t actions-runner-host-docker:local .
 
 main に push すると、ワークフロー [publish](.github/workflows/publish.yml) がイメージをビルドして push します。
 
-PR と公開前の CI は amd64 / arm64 それぞれでビルドし、内蔵 Node 24 が
-24.22.1 以上であること、既定の CA ストアに emSign ECC Root CA - G3 と
-AAA Certificate Services の公開鍵がないこと、Amazon Root CA 1 が残ることを確認します。
-この検証は runner を登録せず、外部通信なしで行います。
+PR と公開前の CI は、amd64 / arm64 それぞれでイメージをビルドし、runner を登録せず、外部と通信しないで次を確かめます ([tests/check-node-ca.cjs](tests/check-node-ca.cjs))。
 
-## eMudhra CA 対応の反映 (PBI-3365)
+- runner に入っている Node 24 (`/home/runner/externals/node24`) が 24.22.1 以上であること
+- その Node の既定の CA ストアと、OS の CA バンドル (`/etc/ssl/certs/ca-certificates.crt`。runner 本体、git、curl、docker が使う) に、emSign ECC Root CA - G3 と AAA Certificate Services の公開鍵がなく、Amazon Root CA 1 が残っていること
 
-runner 2.338.1 の内蔵 Node 24.22.1 を使います。自動更新を止めているため、
-公開しただけでは動作中の runner は切り替わりません。OA PC など各ホストで、
-実行中の job がないことを確認してから以下を行います。
+ベースのイメージには `externals/node20` (amd64 は `node20_alpine` も) も残っていますが、検査していません。GitHub は 2026-09-23 から Node 20 を使えなくしており、runner は `using: node20` の action も Node 24 で動かします (`ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` でも Node 20 には戻せません)。runner の内部の処理も Node 24 です。amd64 の `node24_alpine` (Alpine のコンテナで動かす job 用) は、glibc のイメージの中では動かせないので検査していません。
+
+## イメージを更新したときの反映
+
+runner の自動更新は止めているので、新しいイメージを公開しても、動いている runner はそのままです。各ホストで、実行中の job がないことを確かめてから、runner を作り直します。
 
 ```bash
 actions-runner down
-actions-runner up
-docker inspect --format '{{.Image}}' actions-runner
+actions-runner up   # --pull always で新しいイメージを取得し、そのイメージで runner を作り直す
+# 動いているイメージの digest と、runner の Node の版を確かめる
+docker image inspect --format '{{json .RepoDigests}}' "$(docker inspect --format '{{.Image}}' actions-runner)"
 docker exec actions-runner /home/runner/externals/node24/bin/node --version
-docker exec -i actions-runner /home/runner/externals/node24/bin/node < tests/check-node-ca.cjs
 ```
 
-上の関数は `--pull always` により新しい launcher イメージを取得し、そのイメージで
-runner を作り直します。タグ／digest を固定している場合は固定値も更新します。
-image digest と検証出力を反映記録に残し、通常の job が成功することを確認します。
-旧 Node 20 向けの実行ファイルも上流イメージには残ります。このチェックは
-runner 2.338.1 が利用する Node 24 が対象です。
+タグや digest を固定している場合は、その値も更新してください。このリポジトリを checkout してあれば、CI と同じ検査をホストの runner でも実行できます。
+
+```bash
+docker exec -i actions-runner /home/runner/externals/node24/bin/node < tests/check-node-ca.cjs
+```
