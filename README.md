@@ -90,3 +90,28 @@ docker build -t actions-runner-host-docker:local .
 上のシェル関数のイメージを `actions-runner-host-docker:local` に替えると、手元でビルドしたイメージで試せます (runner のコンテナには、launcher と同じイメージを使います)。
 
 main に push すると、ワークフロー [publish](.github/workflows/publish.yml) がイメージをビルドして push します。
+
+PR と公開前の CI は amd64 / arm64 それぞれでビルドし、内蔵 Node 24 が
+24.22.1 以上であること、既定の CA ストアに emSign ECC Root CA - G3 と
+AAA Certificate Services の公開鍵がないこと、Amazon Root CA 1 が残ることを確認します。
+この検証は runner を登録せず、外部通信なしで行います。
+
+## eMudhra CA 対応の反映 (PBI-3365)
+
+runner 2.338.1 の内蔵 Node 24.22.1 を使います。自動更新を止めているため、
+公開しただけでは動作中の runner は切り替わりません。OA PC など各ホストで、
+実行中の job がないことを確認してから以下を行います。
+
+```bash
+actions-runner down
+actions-runner up
+docker inspect --format '{{.Image}}' actions-runner
+docker exec actions-runner /home/runner/externals/node24/bin/node --version
+docker exec -i actions-runner /home/runner/externals/node24/bin/node < tests/check-node-ca.cjs
+```
+
+上の関数は `--pull always` により新しい launcher イメージを取得し、そのイメージで
+runner を作り直します。タグ／digest を固定している場合は固定値も更新します。
+image digest と検証出力を反映記録に残し、通常の job が成功することを確認します。
+旧 Node 20 向けの実行ファイルも上流イメージには残ります。このチェックは
+runner 2.338.1 が利用する Node 24 が対象です。
