@@ -90,3 +90,28 @@ docker build -t actions-runner-host-docker:local .
 上のシェル関数のイメージを `actions-runner-host-docker:local` に替えると、手元でビルドしたイメージで試せます (runner のコンテナには、launcher と同じイメージを使います)。
 
 main に push すると、ワークフロー [publish](.github/workflows/publish.yml) がイメージをビルドして push します。
+
+PR と公開前の CI は、amd64 / arm64 それぞれでイメージをビルドし、runner を登録せず、外部と通信しないで次を確かめます ([tests/check-node-ca.cjs](tests/check-node-ca.cjs))。
+
+- runner に入っている Node 24 (`/home/runner/externals/node24`) が 24.22.1 以上であること
+- その Node の既定の CA ストアと、OS の CA バンドル (`/etc/ssl/certs/ca-certificates.crt`。runner 本体、git、curl、docker が使う) に、emSign ECC Root CA - G3 と AAA Certificate Services の公開鍵がなく、Amazon Root CA 1 が残っていること
+
+ベースのイメージには `externals/node20` (amd64 は `node20_alpine` も) も残っていますが、検査していません。GitHub は 2026-09-23 から Node 20 を使えなくしており、runner は `using: node20` の action も Node 24 で動かします (`ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` でも Node 20 には戻せません)。runner の内部の処理も Node 24 です。amd64 の `node24_alpine` (Alpine のコンテナで動かす job 用) は、glibc のイメージの中では動かせないので検査していません。
+
+## イメージを更新したときの反映
+
+runner の自動更新は止めているので、新しいイメージを公開しても、動いている runner はそのままです。各ホストで、実行中の job がないことを確かめてから、runner を作り直します。
+
+```bash
+actions-runner down
+actions-runner up   # --pull always で新しいイメージを取得し、そのイメージで runner を作り直す
+# 動いているイメージの digest と、runner の Node の版を確かめる
+docker image inspect --format '{{json .RepoDigests}}' "$(docker inspect --format '{{.Image}}' actions-runner)"
+docker exec actions-runner /home/runner/externals/node24/bin/node --version
+```
+
+タグや digest を固定している場合は、その値も更新してください。このリポジトリを checkout してあれば、CI と同じ検査をホストの runner でも実行できます。
+
+```bash
+docker exec -i actions-runner /home/runner/externals/node24/bin/node < tests/check-node-ca.cjs
+```

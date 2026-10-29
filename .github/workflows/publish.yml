@@ -1,5 +1,5 @@
 # イメージをビルドして、GitHub Container Registry (ghcr.io/idein/actions-runner-host-docker) に push する。
-# main に push したときと、手動で実行したときだけ動く (PR では動かさない)
+# PR ではビルドとCA検証だけ行い、mainへのpushまたは手動実行で公開する
 name: publish
 run-name: publish (${{ github.sha }})
 
@@ -10,6 +10,14 @@ on:
       - Dockerfile
       - launcher.sh
       - entrypoint.sh
+      - tests/check-node-ca.cjs
+      - .github/workflows/publish.yml
+  pull_request:
+    paths:
+      - Dockerfile
+      - launcher.sh
+      - entrypoint.sh
+      - tests/check-node-ca.cjs
       - .github/workflows/publish.yml
   workflow_dispatch:
 
@@ -17,14 +25,38 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish
+  group: publish-${{ github.event_name == 'pull_request' && github.ref || 'release' }}
   cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/idein/actions-runner-host-docker
 
 jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # bash -n は 1 つ目の引数だけを検査する (2 つ目以降は位置パラメーターになる) ので、1 ファイルずつ渡す
+      - run: |
+          bash -n launcher.sh
+          bash -n entrypoint.sh
+      - run: docker build -t runner-ca-check .
+      - name: Check embedded Node and the CA stores (offline)
+        run: |
+          docker run --rm --network none \
+            -v "$PWD/tests:/tests:ro" \
+            --entrypoint /home/runner/externals/node24/bin/node \
+            runner-ca-check /tests/check-node-ca.cjs
   publish:
+    needs: check
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
