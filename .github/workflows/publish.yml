@@ -43,9 +43,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: bash -n launcher.sh entrypoint.sh
+      # bash -n は 1 つ目の引数だけを検査する (2 つ目以降は位置パラメーターになる) ので、1 ファイルずつ渡す
+      - run: |
+          bash -n launcher.sh
+          bash -n entrypoint.sh
       - run: docker build -t runner-ca-check .
-      - name: Check embedded Node and its default CA store (offline)
+      - name: Check embedded Node and the CA stores (offline)
         run: |
           docker run --rm --network none \
             -v "$PWD/tests:/tests:ro" \
