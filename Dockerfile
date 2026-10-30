@@ -2,7 +2,7 @@
 # - launcher.sh (ENTRYPOINT): ホストの docker.sock を渡して実行すると、runner を登録し、runner のコンテナを起動・停止する
 # - entrypoint.sh: runner のコンテナの entrypoint。登録情報をホストのディレクトリに残す
 # runner の自動更新は止めている (--disableupdate) ので、ベースのイメージを Dependabot で更新する
-FROM ghcr.io/actions/actions-runner:2.338.1@sha256:e275409999c37162649aa050ca573f03eab2eabcb3a1e7fcc47548de6b4f9690
+FROM ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
 
 # GitHub Container Registry で、パッケージをこのリポジトリにつなぐ (ベースのイメージの actions/runner は引き継がない)
 LABEL org.opencontainers.image.source="https://github.com/Idein/docker-actions-runner-host-docker" \
